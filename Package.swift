@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 5.9
 import PackageDescription
 
 let package = Package(
@@ -10,7 +10,8 @@ let package = Package(
             path: "Sources/Snipper"
         )
     ],
-    // The Carbon hotkey C-callback and AppKit main-actor usage are simpler in
-    // Swift 5 semantics; strict Swift 6 concurrency buys us nothing here.
-    swiftLanguageModes: [.v5]
+    // Build in Swift 5 language mode — the Carbon hotkey C-callback and AppKit
+    // main-actor usage gain nothing from Swift 6 strict concurrency. A 5.9
+    // tools-version also lets older toolchains (Xcode 15+) build the project.
+    swiftLanguageVersions: [.v5]
 )

@@ -22,7 +22,8 @@ the familiar crosshair (drag a region, or press **Space** to grab a whole window
 ## Requirements
 
 - macOS 13 (Ventura) or later.
-- Xcode **Command Line Tools** (`xcode-select --install`) — full Xcode not needed.
+- Xcode **Command Line Tools** with a Swift 5.9+ toolchain
+  (`xcode-select --install`) — full Xcode not needed.
 
 ## Install
 
