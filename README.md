@@ -15,6 +15,9 @@ the familiar crosshair (drag a region, or press **Space** to grab a whole window
 - Native crosshair region select, or **Space** to capture a whole window.
 - Copies to the clipboard **and** saves a timestamped PNG — or either on its own.
 - Floating bottom-right preview: click to open, hover to keep, ✕ to dismiss.
+- **Markup editor** — hover the preview and click the pencil to draw rectangles,
+  ellipses, freehand, and arrows; then **Copy** the annotated image or **Save**
+  over the PNG.
 - Silent capture — no shutter sound.
 - Menu-bar only: no Dock icon, no window clutter.
 - Optional launch at login.

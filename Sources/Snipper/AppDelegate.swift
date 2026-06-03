@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotKey: HotKey?
     private let screenshots = ScreenshotService()
     private let thumbnail = ThumbnailController()
+    private var editors: [AnnotationEditorWindowController] = []
 
     private var destinationItems: [(item: NSMenuItem, value: ScreenshotService.Destination)] = []
     private var loginItem: NSMenuItem?
@@ -30,7 +31,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                  fileURL: result.url,
                                  isTemporary: result.isTemporary)
         }
+        thumbnail.onEdit = { [weak self] url, isTemporary in
+            self?.openEditor(url: url, isTemporary: isTemporary)
+        }
+    }
 
+    // MARK: - Markup editor
+
+    private func openEditor(url: URL, isTemporary: Bool) {
+        guard let controller = AnnotationEditorWindowController(url: url, isTemporary: isTemporary) else {
+            NSLog("Snipper: couldn't open the editor for \(url.lastPathComponent)")
+            return
+        }
+        controller.onClose = { [weak self, weak controller] in
+            guard let self, let controller else { return }
+            self.editors.removeAll { $0 === controller }
+            // Back to a menu-bar agent only once the last editor is gone.
+            if self.editors.isEmpty { NSApp.setActivationPolicy(.accessory) }
+        }
+        // Become a regular (focusable) app while any editor is open. Multiple
+        // editors are allowed — each is retained here until its own window closes.
+        if editors.isEmpty { NSApp.setActivationPolicy(.regular) }
+        editors.append(controller)
+        NSApp.activate(ignoringOtherApps: true)
+        controller.present()
     }
 
     // MARK: - Hotkey

@@ -9,11 +9,16 @@ final class ThumbnailController {
     private var fileURL: URL?
     private var isTemporary = false
 
+    /// Tapped the pencil: hand the snip (file URL + whether it's a throwaway
+    /// temp) off to the markup editor. The thumbnail then dismisses itself.
+    var onEdit: ((URL, Bool) -> Void)?
+
     private let displaySeconds: TimeInterval = 5
     private let shadowMargin: CGFloat = 24
     private let framePadding: CGFloat = 5
     private let screenMargin: CGFloat = 16
     private let maxImage = NSSize(width: 264, height: 172)
+    private let cornerButton: CGFloat = 34
 
     func show(image: NSImage, fileURL: URL, isTemporary: Bool) {
         dismissNow() // replace any preview already on screen
@@ -70,12 +75,17 @@ final class ThumbnailController {
         imageView.layer?.masksToBounds = true
         card.addSubview(imageView)
 
+        // Corner buttons straddle the top corners, mostly poking outside the
+        // card. Bigger glyph + 28pt hit target so they're easy to click.
+        let cornerSymbol = NSImage.SymbolConfiguration(pointSize: 22, weight: .regular)
+
         // ✕ button, top-left, revealed on hover.
-        let close = NSButton(frame: NSRect(x: -7, y: cardSize.height - 13, width: 20, height: 20))
+        let close = NSButton(frame: NSRect(x: -14, y: cardSize.height - 20, width: cornerButton, height: cornerButton))
         close.bezelStyle = .inline
         close.isBordered = false
         close.title = ""
-        close.image = NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: "Dismiss")
+        close.image = NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: "Dismiss")?
+            .withSymbolConfiguration(cornerSymbol)
         close.imagePosition = .imageOnly
         close.contentTintColor = .secondaryLabelColor
         close.target = self
@@ -83,9 +93,24 @@ final class ThumbnailController {
         close.isHidden = true
         card.addSubview(close)
 
+        // Pencil button, top-right, revealed on hover → opens the markup editor.
+        let edit = NSButton(frame: NSRect(x: cardSize.width - 20, y: cardSize.height - 20, width: cornerButton, height: cornerButton))
+        edit.bezelStyle = .inline
+        edit.isBordered = false
+        edit.title = ""
+        edit.image = NSImage(systemSymbolName: "pencil.tip.crop.circle.fill", accessibilityDescription: "Markup")?
+            .withSymbolConfiguration(cornerSymbol)
+        edit.imagePosition = .imageOnly
+        edit.contentTintColor = .secondaryLabelColor
+        edit.target = self
+        edit.action = #selector(editTapped)
+        edit.isHidden = true
+        card.addSubview(edit)
+
         card.onClick = { [weak self] in self?.openTapped() }
         card.onHover = { [weak self] inside in
             close.isHidden = !inside
+            edit.isHidden = !inside
             if inside { self?.cancelDismissTimer() }
             else { self?.scheduleDismiss(after: 1.5) }
         }
@@ -127,6 +152,17 @@ final class ThumbnailController {
     }
 
     @objc private func closeTapped() {
+        dismiss(animated: true)
+    }
+
+    @objc private func editTapped() {
+        guard let url = fileURL else { return }
+        // Hand the file to the editor and relinquish ownership: clearing
+        // isTemporary stops dismissNow() from deleting it out from under the
+        // editor, which now takes responsibility for cleaning up any temp.
+        let wasTemporary = isTemporary
+        isTemporary = false
+        onEdit?(url, wasTemporary)
         dismiss(animated: true)
     }
 

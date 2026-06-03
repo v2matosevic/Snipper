@@ -4,6 +4,16 @@ All notable changes to Snipper are documented here. This project follows
 [Semantic Versioning](https://semver.org) and the
 [Keep a Changelog](https://keepachangelog.com) format.
 
+## [1.1.0] — 2026-06-03
+
+### Added
+- **Markup editor** for a fresh capture: hover the corner preview and click the
+  pencil to annotate with **rectangles, ellipses, freehand strokes, and arrows**,
+  with adjustable color and stroke width. **Undo** with ⌘Z; **Copy** (Return)
+  puts the annotated image on the clipboard, or **Save** overwrites the saved
+  PNG. Annotations are rendered at the snip's full pixel resolution, so a Retina
+  capture stays sharp.
+
 ## [1.0.0] — 2026-06-03
 
 First public release.
@@ -29,4 +39,5 @@ First public release.
 - GitHub Actions workflow that builds on macOS and publishes a zipped build to
   Releases on a `v*` tag (manual runs upload an artifact).
 
+[1.1.0]: https://github.com/v2matosevic/Snipper/releases/tag/v1.1.0
 [1.0.0]: https://github.com/v2matosevic/Snipper/releases/tag/v1.0.0
