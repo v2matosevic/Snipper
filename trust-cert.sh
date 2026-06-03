@@ -7,12 +7,21 @@
 #                          # add the trust setting — that's expected.
 #
 # The identity lives in its own throwaway keychain — your login keychain is
-# untouched, and it holds nothing but this local code-signing cert.
+# untouched. The keychain's password is randomly generated and stored only in
+# .signing/keychain-pass (git-ignored), so nothing secret is ever committed.
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "$0")" && pwd)"
 KC="$HOME/Library/Keychains/snipper-codesign.keychain-db"
-KC_PASS="snipper-local-signing"
 ID="Snipper Code Signing"
+PASS_FILE="$ROOT/.signing/keychain-pass"
+
+# Random keychain password, generated once and kept out of git.
+mkdir -p "$ROOT/.signing"
+if [ ! -f "$PASS_FILE" ]; then
+  ( umask 077; openssl rand -hex 24 > "$PASS_FILE" )
+fi
+KC_PASS="$(cat "$PASS_FILE")"
 
 if security find-identity -v -p codesigning "$KC" 2>/dev/null | grep -q "$ID"; then
   echo "✓ '$ID' already present and trusted — nothing to do."
@@ -28,6 +37,7 @@ security unlock-keychain -p "$KC_PASS" "$KC"
 
 if ! security find-identity -p codesigning "$KC" 2>/dev/null | grep -q "$ID"; then
   echo "▸ Generating self-signed code-signing certificate…"
+  P12PASS="$(openssl rand -hex 12)"   # transient PKCS#12 transport password
   cat > /tmp/snip-openssl.cnf <<'EOF'
 [ req ]
 distinguished_name = dn
@@ -44,9 +54,9 @@ EOF
     -keyout /tmp/snip.key -out /tmp/snip.crt -config /tmp/snip-openssl.cnf
   # Apple's `security` can't read OpenSSL 3's default PKCS#12 MAC — force legacy.
   openssl pkcs12 -export -out /tmp/snip.p12 -inkey /tmp/snip.key -in /tmp/snip.crt \
-    -name "$ID" -passout pass:snipper \
+    -name "$ID" -passout "pass:$P12PASS" \
     -legacy -certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES -macalg sha1
-  security import /tmp/snip.p12 -P snipper -k "$KC" -T /usr/bin/codesign -A
+  security import /tmp/snip.p12 -P "$P12PASS" -k "$KC" -T /usr/bin/codesign -A
   security set-key-partition-list -S apple-tool:,apple: -s -k "$KC_PASS" "$KC" >/dev/null
   rm -f /tmp/snip.key /tmp/snip.crt /tmp/snip.p12 /tmp/snip-openssl.cnf
 fi

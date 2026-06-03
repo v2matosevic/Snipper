@@ -1,4 +1,5 @@
 .build/
 Snipper.app/
+.signing/
 .DS_Store
 *.xcodeproj

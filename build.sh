@@ -9,10 +9,11 @@ APP_DIR="$ROOT/$APP_NAME.app"
 
 # Stable self-signed signing identity (so macOS keeps the Screen Recording grant
 # across rebuilds — ad-hoc signatures change every build and lose the grant).
-# Only a local, throwaway code-signing cert lives in this keychain; no secrets.
+# Set up once with ./trust-cert.sh. The keychain's password is random and lives
+# only in .signing/keychain-pass (git-ignored) — never committed.
 SIGN_KC="$HOME/Library/Keychains/snipper-codesign.keychain-db"
 SIGN_ID="Snipper Code Signing"
-SIGN_KC_PASS="snipper-local-signing"
+SIGN_PASS_FILE="$ROOT/.signing/keychain-pass"
 
 echo "▸ Building $APP_NAME (release)…"
 swift build -c release --package-path "$ROOT"
@@ -41,9 +42,11 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
+if [ -f "$SIGN_PASS_FILE" ]; then
+  security unlock-keychain -p "$(cat "$SIGN_PASS_FILE")" "$SIGN_KC" 2>/dev/null || true
+fi
 if security find-identity -v -p codesigning "$SIGN_KC" 2>/dev/null | grep -q "$SIGN_ID"; then
   echo "▸ Code signing with stable identity '$SIGN_ID'…"
-  security unlock-keychain -p "$SIGN_KC_PASS" "$SIGN_KC" 2>/dev/null || true
   # codesign only looks in the keychain search list — ensure ours is on it (idempotent).
   CURRENT=$(security list-keychains -d user | sed 's/"//g' | xargs)
   case " $CURRENT " in
