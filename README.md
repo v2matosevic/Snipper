@@ -27,6 +27,20 @@ the familiar crosshair (drag a region, or press **Space** to grab a whole window
 
 ## Install
 
+### Download a build
+
+Grab the latest zip from
+[**Releases**](https://github.com/v2matosevic/Snipper/releases), unzip, and move
+**Snipper.app** to `/Applications`. These builds are ad-hoc signed (no Apple
+Developer ID, not notarized), so macOS Gatekeeper warns on first launch — either
+right-click **Snipper.app** → **Open** → **Open**, or run:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Snipper.app
+```
+
+### Build from source
+
 ```sh
 git clone https://github.com/v2matosevic/Snipper.git
 cd Snipper
@@ -35,8 +49,9 @@ cd Snipper
 open Snipper.app
 ```
 
-To keep it around, drag `Snipper.app` into `/Applications` and turn on **Launch at
-Login** from its menu.
+Building from source keeps the app stably signed (no Gatekeeper warning) and is the
+better path if you'll tweak it. To keep it around, drag `Snipper.app` into
+`/Applications` and turn on **Launch at Login** from its menu.
 
 ## Stable signing — run once (recommended)
 

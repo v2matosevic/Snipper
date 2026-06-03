@@ -1,0 +1,56 @@
+name: Release
+
+# Builds Snipper.app on macOS and, when you push a version tag (e.g. v1.0.0),
+# publishes a zipped build to GitHub Releases. Run manually (workflow_dispatch)
+# to produce a downloadable artifact without cutting a release.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: swift --version
+
+      - name: Build
+        run: ./build.sh
+
+      - name: Package
+        run: ditto -c -k --keepParent Snipper.app Snipper.zip
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Snipper-app
+          path: Snipper.zip
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          printf '%s\n' \
+            "Snipper — Windows-style ⇧⌥S region screenshots for macOS." \
+            "" \
+            "### Install" \
+            "1. Unzip and move **Snipper.app** to /Applications." \
+            "2. This build is **ad-hoc signed** (no Apple Developer ID, not notarized)," \
+            "   so macOS Gatekeeper warns on first launch. Either:" \
+            "   - right-click **Snipper.app** → **Open** → **Open**, or" \
+            "   - run: \`xattr -dr com.apple.quarantine /Applications/Snipper.app\`" \
+            "3. Press **⇧⌥S**, enable Snipper under System Settings → Privacy &" \
+            "   Security → Screen Recording, then relaunch it." \
+            "" \
+            "Building from source keeps it stably signed — see the README." \
+            > notes.md
+          gh release create "$GITHUB_REF_NAME" Snipper.zip \
+            --title "Snipper $GITHUB_REF_NAME" \
+            --notes-file notes.md

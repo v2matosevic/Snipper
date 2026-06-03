@@ -14,6 +14,7 @@ APP_DIR="$ROOT/$APP_NAME.app"
 SIGN_KC="$HOME/Library/Keychains/snipper-codesign.keychain-db"
 SIGN_ID="Snipper Code Signing"
 SIGN_PASS_FILE="$ROOT/.signing/keychain-pass"
+ICON_SRC="$ROOT/icon/AppIcon.png"   # 1024×1024 master (regenerate via icon/make-icon.swift)
 
 echo "▸ Building $APP_NAME (release)…"
 swift build -c release --package-path "$ROOT"
@@ -34,6 +35,7 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
   <key>CFBundleVersion</key><string>1</string>
   <key>CFBundleShortVersionString</key><string>1.0</string>
   <key>CFBundleExecutable</key><string>${APP_NAME}</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>LSUIElement</key><true/>
@@ -41,6 +43,20 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 </dict>
 </plist>
 PLIST
+
+# Build the .icns from the 1024px master and drop it in the bundle.
+if [ -f "$ICON_SRC" ]; then
+  echo "▸ Generating app icon…"
+  ICONSET="$(mktemp -d)/AppIcon.iconset"
+  mkdir -p "$ICONSET"
+  for s in 16 32 128 256 512; do
+    sips -z "$s" "$s" "$ICON_SRC" --out "$ICONSET/icon_${s}x${s}.png" >/dev/null
+    d=$(( s * 2 ))
+    sips -z "$d" "$d" "$ICON_SRC" --out "$ICONSET/icon_${s}x${s}@2x.png" >/dev/null
+  done
+  iconutil -c icns "$ICONSET" -o "$APP_DIR/Contents/Resources/AppIcon.icns"
+  rm -rf "$(dirname "$ICONSET")"
+fi
 
 if [ -f "$SIGN_PASS_FILE" ]; then
   security unlock-keychain -p "$(cat "$SIGN_PASS_FILE")" "$SIGN_KC" 2>/dev/null || true
