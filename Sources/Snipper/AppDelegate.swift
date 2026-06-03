@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var hotKey: HotKey?
     private let screenshots = ScreenshotService()
+    private let thumbnail = ThumbnailController()
 
     private var destinationItems: [(item: NSMenuItem, value: ScreenshotService.Destination)] = []
     private var loginItem: NSMenuItem?
@@ -24,7 +25,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         restoreDestination()
         buildStatusItem()
         registerHotKey()
-        screenshots.onCapture = { [weak self] _ in self?.flashSuccess() }
+        screenshots.onCapture = { [weak self] result in
+            self?.thumbnail.show(image: result.image,
+                                 fileURL: result.url,
+                                 isTemporary: result.isTemporary)
+        }
     }
 
     // MARK: - Hotkey
@@ -160,12 +165,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setIcon(_ symbol: String) {
         statusItem.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Snipper")
-    }
-
-    private func flashSuccess() {
-        setIcon("checkmark.circle.fill")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak self] in
-            self?.setIcon("camera.viewfinder")
-        }
     }
 }

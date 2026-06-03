@@ -3,7 +3,9 @@
 A tiny macOS menu-bar app that brings the Windows **Win+Shift+S** snipping
 experience to the Mac: press **⇧⌥S** (Shift-Option-S) anywhere, drag to select a
 region of the screen, and the snip lands on your clipboard **and** in
-`~/Pictures/Snipper`.
+`~/Pictures/Snipper`. A floating preview fades in at the bottom-right corner
+(just like macOS's own screenshots) — click it to open the capture, or ignore
+it and it fades away on its own.
 
 It wraps macOS's own `screencapture` tool, so the selection UI is the native
 crosshair (drag a region, or press **Space** to grab a whole window).
@@ -34,6 +36,8 @@ app — that's macOS, not Snipper.)
 
 - **⇧⌥S** — capture a selection. Drag a box, or hit **Space** then click a window.
   **Esc** cancels.
+- A preview fades in at the bottom-right: **click** it to open the snip, **hover**
+  to keep it on screen, **✕** to dismiss. Otherwise it auto-dismisses after 5s.
 - Menu-bar icon → choose where snips go: **Clipboard + Folder** (default),
   **Clipboard only**, or **Folder only**.
 - **Open Save Folder** reveals `~/Pictures/Snipper`.
@@ -56,6 +60,7 @@ private let modifiers = UInt32(shiftKey | optionKey)  // Carbon modifier flags
 |-------|------|
 | `HotKey.swift` | System-wide ⇧⌥S via Carbon `RegisterEventHotKey` — no Accessibility permission required. |
 | `ScreenshotService.swift` | Runs `screencapture -i -o` to a temp file, then routes it to clipboard and/or `~/Pictures/Snipper`. |
+| `ThumbnailController.swift` | The bottom-right floating preview: a borderless `NSPanel` that fades in, auto-dismisses, and opens the file on click. |
 | `AppDelegate.swift` | Menu-bar item, destination toggles, permission prompt, launch-at-login. |
 
 ## Notes / limitations
