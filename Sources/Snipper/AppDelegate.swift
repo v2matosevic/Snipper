@@ -30,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                  fileURL: result.url,
                                  isTemporary: result.isTemporary)
         }
+
     }
 
     // MARK: - Hotkey
@@ -44,32 +45,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func capture() {
-        guard ensureScreenRecordingPermission() else { return }
+        // Run screencapture directly. The act of capturing is what registers
+        // Snipper in the Screen Recording list and triggers the OS prompt — a
+        // CGPreflight gate here just blocks before that can happen.
         screenshots.captureInteractive()
-    }
-
-    // MARK: - Screen Recording permission
-
-    private func ensureScreenRecordingPermission() -> Bool {
-        if CGPreflightScreenCaptureAccess() { return true }
-        // Adds Snipper to the Screen Recording list and triggers the OS prompt.
-        CGRequestScreenCaptureAccess()
-        presentPermissionAlert()
-        return false
-    }
-
-    private func presentPermissionAlert() {
-        NSApp.activate(ignoringOtherApps: true)
-        let alert = NSAlert()
-        alert.messageText = "Screen Recording permission needed"
-        alert.informativeText = "Enable Snipper under System Settings → Privacy & Security → "
-            + "Screen Recording, then press ⇧⌥S again."
-        alert.addButton(withTitle: "Open Settings")
-        alert.addButton(withTitle: "Later")
-        if alert.runModal() == .alertFirstButtonReturn,
-           let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
-            NSWorkspace.shared.open(url)
-        }
     }
 
     // MARK: - Menu bar

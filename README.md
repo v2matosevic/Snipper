@@ -20,17 +20,32 @@ open Snipper.app
 ```
 
 `build.sh` compiles a release binary with Swift Package Manager, wraps it in a
-`Snipper.app` bundle (menu-bar–only, no Dock icon), and ad-hoc code-signs it.
+`Snipper.app` bundle (menu-bar–only, no Dock icon), and code-signs it — with the
+stable self-signed identity from `./trust-cert.sh` if present (see *Stable
+signing* below), otherwise ad-hoc.
+
+## Stable signing — run once
+
+```sh
+./trust-cert.sh
+```
+
+Creates and trusts a self-signed code-signing identity (in its own throwaway
+keychain; macOS asks for your login password once to trust it). Without it,
+ad-hoc signing works but macOS re-asks for Screen Recording after every rebuild,
+because an ad-hoc signature changes each build and the grant can't stick to it.
 
 ## First run — grant Screen Recording
 
-macOS requires Screen Recording permission for *any* screen capture. The first
-time you press ⇧⌥S, Snipper adds itself to the list and points you at:
+macOS requires Screen Recording permission for *any* screen capture, and that
+list has **no manual "+"** — an app only appears once it actually captures. So:
 
-**System Settings → Privacy & Security → Screen Recording → enable Snipper**
+1. Press **⇧⌥S** and drag a selection. macOS registers Snipper and prompts.
+2. Enable **Snipper** in System Settings → Privacy & Security → **Screen Recording**.
+3. Quit & reopen Snipper (a running process can't see a fresh grant), then ⇧⌥S works.
 
-Then press ⇧⌥S again. (Toggling the permission may ask you to quit & reopen the
-app — that's macOS, not Snipper.)
+With the stable signing identity above, you only do this once — the grant
+survives rebuilds.
 
 ## Use
 
@@ -59,15 +74,16 @@ private let modifiers = UInt32(shiftKey | optionKey)  // Carbon modifier flags
 | Piece | Role |
 |-------|------|
 | `HotKey.swift` | System-wide ⇧⌥S via Carbon `RegisterEventHotKey` — no Accessibility permission required. |
-| `ScreenshotService.swift` | Runs `screencapture -i -o` to a temp file, then routes it to clipboard and/or `~/Pictures/Snipper`. |
+| `ScreenshotService.swift` | Runs `screencapture -i -o -x` (silent) to a temp file, then routes it to clipboard and/or `~/Pictures/Snipper`. |
 | `ThumbnailController.swift` | The bottom-right floating preview: a borderless `NSPanel` that fades in, auto-dismisses, and opens the file on click. |
-| `AppDelegate.swift` | Menu-bar item, destination toggles, permission prompt, launch-at-login. |
+| `AppDelegate.swift` | Menu-bar item, destination toggles, the ⇧⌥S hotkey, launch-at-login. |
 
 ## Notes / limitations
 
-- The ad-hoc signature changes on each `./build.sh`, which can make macOS
-  re-ask for Screen Recording after a rebuild. For a stable identity, sign with
-  a self-signed or Developer ID certificate instead of `--sign -`.
+- Snipper captures via the `screencapture` tool rather than in-process, so it
+  has no preflight permission gate — running a capture is what registers it with
+  macOS and triggers the Screen Recording prompt. See *Stable signing* for why
+  the grant otherwise wouldn't persist.
 - `Launch at Login` records the app's current path; move `Snipper.app` and
   you'll need to toggle it off/on again.
 - macOS already has a built-in equivalent (System Settings → Keyboard →

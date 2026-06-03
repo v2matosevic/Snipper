@@ -47,7 +47,8 @@ final class ScreenshotService {
         task.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
         // -i : interactive selection (drag a region, Space toggles window mode)
         // -o : omit the window shadow when capturing a window
-        task.arguments = ["-i", "-o", tempURL.path]
+        // -x : silent — no camera shutter sound
+        task.arguments = ["-i", "-o", "-x", tempURL.path]
 
         task.terminationHandler = { [weak self] _ in
             DispatchQueue.main.async { self?.handleResult(tempURL: tempURL) }
