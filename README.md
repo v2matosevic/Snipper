@@ -20,6 +20,13 @@ the familiar crosshair (drag a region, or press **Space** to grab a whole window
   **numbered step badges** (1, 2, 3… — perfect for "click here, then here"
   bug reports and AI prompts); then **Copy** the annotated image or **Save**
   over the PNG.
+- **Copy Text (OCR)** — one click in the editor extracts the snip's text
+  (error dialogs, stack traces, logs) to the clipboard via Apple's Vision
+  framework, fully on-device. Paste text into an AI prompt instead of pixels.
+- **Drag the preview anywhere** — the floating thumbnail is a drag source, so
+  you can drop the snip straight into a chat input, terminal, or Finder.
+- **Copy Path** in the editor puts the PNG's file path on the clipboard, for
+  `look at <path>`-style CLI prompts.
 - Silent capture — no shutter sound.
 - Menu-bar only: no Dock icon, no window clutter.
 - Optional launch at login.

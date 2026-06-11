@@ -14,6 +14,13 @@ All notable changes to Snipper are documented here. This project follows
   (1, 2, 3…); drag to fine-position. Undoing a badge renumbers the rest, since
   numbers derive from order.
 
+- **Copy Text (OCR)** button in the editor — on-device Vision text recognition
+  puts the snip's text (error dialogs, logs) on the clipboard.
+- **Copy Path** button in the editor (file-backed snips) — copies the PNG's
+  path for CLI/AI prompts.
+- The corner preview is now a **drag source** — drag the snip out and drop it
+  into a chat input, terminal, or Finder.
+
 ### Changed
 - Clicking the corner preview now opens the **markup editor** instead of the
   default image viewer — the pencil button still works too. The file itself is

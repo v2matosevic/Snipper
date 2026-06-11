@@ -108,6 +108,22 @@ final class ThumbnailController {
         card.addSubview(edit)
 
         card.onClick = { [weak self] in self?.editTapped() }
+        // Dragging the preview out hands the file to whatever you drop it on
+        // (a chat input, a terminal, Finder…). Keep the panel alive during the
+        // drag; afterwards relinquish the temp (the receiver copies on drop,
+        // but a slow receiver may still be reading — the OS sweeps temp files).
+        card.dragURL = fileURL
+        card.dragImage = image
+        card.onDragStarted = { [weak self] in self?.cancelDismissTimer() }
+        card.onDragEnded = { [weak self] completed in
+            guard let self else { return }
+            if completed {
+                self.isTemporary = false
+                self.dismiss(animated: true)
+            } else {
+                self.scheduleDismiss(after: self.displaySeconds)
+            }
+        }
         card.onHover = { [weak self] inside in
             close.isHidden = !inside
             edit.isHidden = !inside
@@ -215,11 +231,21 @@ final class ThumbnailController {
 }
 
 /// Card view that reports clicks and hover so the controller can open the file
-/// or pause auto-dismiss.
-private final class ThumbnailCardView: NSView {
+/// or pause auto-dismiss, and acts as a drag source so the snip can be dropped
+/// straight into another app. A press that moves a few points becomes a drag;
+/// otherwise mouse-up fires the click.
+private final class ThumbnailCardView: NSView, NSDraggingSource {
     var onClick: (() -> Void)?
     var onHover: ((Bool) -> Void)?
+    var dragURL: URL?
+    var dragImage: NSImage?
+    var onDragStarted: (() -> Void)?
+    /// `true` when the drop was accepted somewhere, `false` on a cancelled drag.
+    var onDragEnded: ((Bool) -> Void)?
+
     private var tracking: NSTrackingArea?
+    private var downPoint: NSPoint?
+    private var didDrag = false
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
@@ -231,7 +257,42 @@ private final class ThumbnailCardView: NSView {
         tracking = area
     }
 
-    override func mouseDown(with event: NSEvent) { onClick?() }
+    override func mouseDown(with event: NSEvent) {
+        downPoint = event.locationInWindow
+        didDrag = false
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard !didDrag, let down = downPoint, let url = dragURL else { return }
+        let p = event.locationInWindow
+        guard hypot(p.x - down.x, p.y - down.y) > 4 else { return }
+        didDrag = true
+        onDragStarted?()
+
+        let item = NSDraggingItem(pasteboardWriter: url as NSURL)
+        item.setDraggingFrame(bounds, contents: dragImage)
+        beginDraggingSession(with: [item], event: event, source: self)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if !didDrag { onClick?() }
+        downPoint = nil
+    }
+
     override func mouseEntered(with event: NSEvent) { onHover?(true) }
     override func mouseExited(with event: NSEvent) { onHover?(false) }
+
+    // MARK: - NSDraggingSource
+
+    func draggingSession(_ session: NSDraggingSession,
+                         sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
+        .copy
+    }
+
+    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint,
+                         operation: NSDragOperation) {
+        didDrag = false
+        downPoint = nil
+        onDragEnded?(operation != [])
+    }
 }

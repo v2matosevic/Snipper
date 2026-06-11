@@ -1,5 +1,6 @@
 import AppKit
 import CoreImage
+import Vision
 
 /// A lightweight markup editor for a freshly-captured snip. Opened from the
 /// pencil button on the corner thumbnail. Lets you draw rectangles, ellipses,
@@ -137,19 +138,29 @@ final class AnnotationEditorWindowController: NSObject, NSWindowDelegate {
         undo.keyEquivalent = "z"
         undo.keyEquivalentModifierMask = .command
 
+        // OCR: extract the snip's text (error dialogs, logs) to the clipboard —
+        // pasting text into an AI prompt beats pasting pixels.
+        let ocr = toolButton("text.viewfinder", "Copy Text (OCR)", #selector(ocrTapped))
+        ocr.toolTip = "Copy text (OCR)"
+
         let copy = NSButton(title: "Copy", target: self, action: #selector(copyTapped))
         copy.bezelStyle = .rounded
         copy.keyEquivalent = "\r" // default button — Return copies
         copy.sizeToFit()
 
-        let stack = NSStackView(views: [tools, colorWell, widthSlider, undo])
+        let stack = NSStackView(views: [tools, colorWell, widthSlider, undo, ocr])
         stack.orientation = .horizontal
         stack.spacing = 12
         stack.alignment = .centerY
         stack.translatesAutoresizingMaskIntoConstraints = false
 
-        // "Save" only makes sense when the snip is backed by a real file.
+        // "Save" and "Copy Path" only make sense when the snip is backed by a
+        // real file (a temp's path dies with the editor).
         if !isTemporary {
+            let path = toolButton("folder", "Copy Path", #selector(copyPathTapped))
+            path.toolTip = "Copy file path"
+            stack.addArrangedSubview(path)
+
             let save = NSButton(title: "Save", target: self, action: #selector(saveTapped))
             save.bezelStyle = .rounded
             save.sizeToFit()
@@ -192,6 +203,57 @@ final class AnnotationEditorWindowController: NSObject, NSWindowDelegate {
     }
 
     @objc private func undoTapped() { canvas.undo() }
+
+    @objc private func copyPathTapped() {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(fileURL.path, forType: .string)
+        flashTitle("Path copied")
+    }
+
+    /// Recognize the snip's text off the main thread and put it on the
+    /// clipboard. The window stays open — OCR is usually a side-grab on the way
+    /// to annotating.
+    @objc private func ocrTapped() {
+        guard let cg = baseImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            NSSound.beep(); return
+        }
+        flashTitle("Reading text…", revertAfter: 0)
+        let request = VNRecognizeTextRequest { [weak self] request, _ in
+            let lines = (request.results as? [VNRecognizedTextObservation] ?? [])
+                .compactMap { $0.topCandidates(1).first?.string }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                guard !lines.isEmpty else {
+                    self.flashTitle("No text found")
+                    return
+                }
+                let pb = NSPasteboard.general
+                pb.clearContents()
+                pb.setString(lines.joined(separator: "\n"), forType: .string)
+                self.flashTitle("Text copied")
+            }
+        }
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            let handler = VNImageRequestHandler(cgImage: cg)
+            do { try handler.perform([request]) } catch {
+                DispatchQueue.main.async { [weak self] in self?.flashTitle("OCR failed") }
+            }
+        }
+    }
+
+    /// Briefly swap the window title as lightweight feedback, then restore it.
+    /// `revertAfter: 0` leaves the message up until the next flash.
+    private func flashTitle(_ message: String, revertAfter seconds: TimeInterval = 1.6) {
+        window.title = message
+        guard seconds > 0 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
+            guard let self, self.window.title == message else { return }
+            self.window.title = "Edit Snip"
+        }
+    }
 
     @objc private func copyTapped() {
         guard let image = flattened() else { NSSound.beep(); return }
