@@ -4,6 +4,21 @@ All notable changes to Snipper are documented here. This project follows
 [Semantic Versioning](https://semver.org) and the
 [Keep a Changelog](https://keepachangelog.com) format.
 
+## [Unreleased]
+
+### Added
+- **Blur tool** in the markup editor — drag a rectangle to pixelate sensitive
+  areas (tokens, emails, customer data) before sharing. Identical on screen and
+  in the exported PNG.
+- **Step badges** in the markup editor — click to drop numbered circles
+  (1, 2, 3…); drag to fine-position. Undoing a badge renumbers the rest, since
+  numbers derive from order.
+
+### Changed
+- Clicking the corner preview now opens the **markup editor** instead of the
+  default image viewer — the pencil button still works too. The file itself is
+  one click away via **Open Save Folder**.
+
 ## [1.1.0] — 2026-06-03
 
 ### Added

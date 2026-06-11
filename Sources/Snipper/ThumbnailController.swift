@@ -2,7 +2,7 @@ import AppKit
 
 /// A floating thumbnail in the bottom-right corner, mimicking macOS's own
 /// post-screenshot preview: fades in, sits for a few seconds, then fades away.
-/// Click it to open the capture; hover to keep it around; ✕ to dismiss.
+/// Click it to open the markup editor; hover to keep it around; ✕ to dismiss.
 final class ThumbnailController {
     private var panel: NSPanel?
     private var dismissWork: DispatchWorkItem?
@@ -107,7 +107,7 @@ final class ThumbnailController {
         edit.isHidden = true
         card.addSubview(edit)
 
-        card.onClick = { [weak self] in self?.openTapped() }
+        card.onClick = { [weak self] in self?.editTapped() }
         card.onHover = { [weak self] inside in
             close.isHidden = !inside
             edit.isHidden = !inside
@@ -142,14 +142,6 @@ final class ThumbnailController {
     }
 
     // MARK: - Actions
-
-    @objc private func openTapped() {
-        if let url = fileURL {
-            isTemporary = false // opened → let it live; don't delete underneath the viewer
-            NSWorkspace.shared.open(url)
-        }
-        dismiss(animated: true)
-    }
 
     @objc private func closeTapped() {
         dismiss(animated: true)

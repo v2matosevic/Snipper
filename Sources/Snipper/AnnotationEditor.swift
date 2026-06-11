@@ -1,4 +1,5 @@
 import AppKit
+import CoreImage
 
 /// A lightweight markup editor for a freshly-captured snip. Opened from the
 /// pencil button on the corner thumbnail. Lets you draw rectangles, ellipses,
@@ -10,10 +11,12 @@ import AppKit
 /// stays crisp. The flattened export is rendered at the image's true pixel
 /// resolution so an annotated Retina snip is exactly as sharp as the original.
 final class AnnotationEditorWindowController: NSObject, NSWindowDelegate {
-    enum Tool: Int { case rectangle = 0, ellipse, freehand, arrow }
+    enum Tool: Int { case rectangle = 0, ellipse, freehand, arrow, blur, step }
 
-    /// One drawn shape. For rectangle/ellipse/arrow `points` is [start, end];
-    /// for freehand it's every sampled point along the drag.
+    /// One drawn shape. For rectangle/ellipse/arrow/blur `points` is
+    /// [start, end]; for freehand it's every sampled point along the drag; for
+    /// step it's the single badge position. Step badges carry no number — it's
+    /// derived from draw order, so undo renumbers the rest automatically.
     struct Annotation {
         var tool: Tool
         var points: [CGPoint]
@@ -110,9 +113,10 @@ final class AnnotationEditorWindowController: NSObject, NSWindowDelegate {
         // Tool picker (radio-style): rectangle · ellipse · freehand · arrow.
         let tools = NSSegmentedControl(labels: [], trackingMode: .selectOne, target: self,
                                        action: #selector(toolChanged(_:)))
-        tools.segmentCount = 4
-        let symbols = ["rectangle", "circle", "scribble", "arrow.up.right"]
-        let names = ["Rectangle", "Ellipse", "Freehand", "Arrow"]
+        tools.segmentCount = 6
+        let symbols = ["rectangle", "circle", "scribble", "arrow.up.right",
+                       "circle.grid.3x3.fill", "1.circle"]
+        let names = ["Rectangle", "Ellipse", "Freehand", "Arrow", "Blur", "Step"]
         for (i, sym) in symbols.enumerated() {
             tools.setImage(NSImage(systemSymbolName: sym, accessibilityDescription: names[i]), forSegment: i)
             tools.setWidth(40, forSegment: i)
@@ -300,6 +304,12 @@ final class AnnotationCanvasView: NSView {
 
     private var image: NSImage?
 
+    // Pixelated copy of the base image, built once on first use of the blur
+    // tool. Blur regions just draw the matching crop of this image, so the
+    // effect is identical on screen and in the export.
+    private var pixelatedImage: NSImage?
+    private var pixelatedSize: NSSize = .zero
+
     func configure(image: NSImage, color: NSColor, lineWidth: CGFloat, tool: Tool) {
         self.image = image
         self.strokeColor = color
@@ -323,14 +333,86 @@ final class AnnotationCanvasView: NSView {
     /// Stroke every annotation. `scale` maps stored point coords to the target
     /// space (1 on screen, pixels/points on export).
     func drawAnnotations(_ list: [Annotation], scale: CGFloat) {
+        var stepNumber = 0
         for ann in list {
-            ann.color.setStroke()
-            let path = bezierPath(for: ann, scale: scale)
-            path.lineWidth = max(0.5, ann.lineWidth * scale)
-            path.lineCapStyle = .round
-            path.lineJoinStyle = .round
-            path.stroke()
+            switch ann.tool {
+            case .blur:
+                drawBlur(ann, scale: scale)
+            case .step:
+                stepNumber += 1
+                drawStep(ann, number: stepNumber, scale: scale)
+            default:
+                ann.color.setStroke()
+                let path = bezierPath(for: ann, scale: scale)
+                path.lineWidth = max(0.5, ann.lineWidth * scale)
+                path.lineCapStyle = .round
+                path.lineJoinStyle = .round
+                path.stroke()
+            }
         }
+    }
+
+    /// Paint the matching crop of the pixelated image over the dragged rect.
+    private func drawBlur(_ ann: Annotation, scale: CGFloat) {
+        guard ann.points.count >= 2, let pixelated = pixelatedOrBuild() else { return }
+        let a = CGPoint(x: ann.points[0].x * scale, y: ann.points[0].y * scale)
+        let b = CGPoint(x: ann.points[1].x * scale, y: ann.points[1].y * scale)
+        let dest = rect(a, b)
+        // Map the annotation rect (canvas points) into the pixelated image's
+        // own coordinate space (1 point == 1 source pixel).
+        let toSource = pixelatedSize.width / bounds.width
+        let src = NSRect(x: min(ann.points[0].x, ann.points[1].x) * toSource,
+                         y: min(ann.points[0].y, ann.points[1].y) * toSource,
+                         width: abs(ann.points[0].x - ann.points[1].x) * toSource,
+                         height: abs(ann.points[0].y - ann.points[1].y) * toSource)
+        pixelated.draw(in: dest, from: src, operation: .sourceOver, fraction: 1,
+                       respectFlipped: false,
+                       hints: [.interpolation: NSImageInterpolation.none.rawValue])
+    }
+
+    /// A filled circle badge with the step's number centered in white.
+    private func drawStep(_ ann: Annotation, number: Int, scale: CGFloat) {
+        guard let p = ann.points.first else { return }
+        let center = CGPoint(x: p.x * scale, y: p.y * scale)
+        let radius = max(14, ann.lineWidth * 3.5) * scale
+        let circleRect = NSRect(x: center.x - radius, y: center.y - radius,
+                                width: radius * 2, height: radius * 2)
+        let circle = NSBezierPath(ovalIn: circleRect)
+        ann.color.setFill()
+        circle.fill()
+        NSColor.white.setStroke()
+        circle.lineWidth = max(1, 2 * scale)
+        circle.stroke()
+
+        let text = "\(number)"
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.boldSystemFont(ofSize: radius * 1.05),
+            .foregroundColor: NSColor.white,
+        ]
+        let size = text.size(withAttributes: attrs)
+        text.draw(at: CGPoint(x: center.x - size.width / 2,
+                              y: center.y - size.height / 2),
+                  withAttributes: attrs)
+    }
+
+    /// Build the pixelated copy lazily — most edits never touch the blur tool.
+    private func pixelatedOrBuild() -> NSImage? {
+        if let pixelatedImage { return pixelatedImage }
+        guard let image,
+              let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let filter = CIFilter(name: "CIPixellate") else { return nil }
+        let input = CIImage(cgImage: cg)
+        filter.setValue(input, forKey: kCIInputImageKey)
+        // Block size tracks image width so the mosaic reads the same on a tiny
+        // UI grab and a full-screen Retina capture.
+        filter.setValue(max(8, CGFloat(cg.width) / 80), forKey: kCIInputScaleKey)
+        filter.setValue(CIVector(x: 0, y: 0), forKey: kCIInputCenterKey)
+        guard let output = filter.outputImage,
+              let outCG = CIContext().createCGImage(output, from: input.extent) else { return nil }
+        pixelatedSize = NSSize(width: cg.width, height: cg.height)
+        let result = NSImage(cgImage: outCG, size: pixelatedSize)
+        pixelatedImage = result
+        return result
     }
 
     private func bezierPath(for ann: Annotation, scale: CGFloat) -> NSBezierPath {
@@ -350,6 +432,8 @@ final class AnnotationCanvasView: NSView {
         case .arrow:
             guard pts.count >= 2 else { break }
             appendArrow(to: path, from: pts[0], to: pts[1], lineWidth: ann.lineWidth * scale)
+        case .blur, .step:
+            break // drawn directly in drawAnnotations, never stroked as a path
         }
         return path
     }
@@ -384,9 +468,12 @@ final class AnnotationCanvasView: NSView {
     override func mouseDragged(with event: NSEvent) {
         guard current != nil else { return }
         let p = clamp(convert(event.locationInWindow, from: nil))
-        if current!.tool == .freehand {
+        switch current!.tool {
+        case .freehand:
             current!.points.append(p)
-        } else {
+        case .step:
+            current!.points[0] = p // dragging fine-positions the badge
+        default:
             current!.points[1] = p
         }
         needsDisplay = true
@@ -401,6 +488,7 @@ final class AnnotationCanvasView: NSView {
 
     /// Drop accidental dot-clicks: a shape that never really moved.
     private func isMeaningful(_ ann: Annotation) -> Bool {
+        if ann.tool == .step { return true } // a step IS a click
         if ann.tool == .freehand { return ann.points.count > 1 }
         guard ann.points.count >= 2 else { return false }
         return hypot(ann.points[0].x - ann.points[1].x, ann.points[0].y - ann.points[1].y) > 3

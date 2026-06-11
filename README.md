@@ -14,9 +14,11 @@ the familiar crosshair (drag a region, or press **Space** to grab a whole window
 - **⇧⌥S** global shortcut — works in any app, and is rebindable.
 - Native crosshair region select, or **Space** to capture a whole window.
 - Copies to the clipboard **and** saves a timestamped PNG — or either on its own.
-- Floating bottom-right preview: click to open, hover to keep, ✕ to dismiss.
-- **Markup editor** — hover the preview and click the pencil to draw rectangles,
-  ellipses, freehand, and arrows; then **Copy** the annotated image or **Save**
+- Floating bottom-right preview: click to mark up, hover to keep, ✕ to dismiss.
+- **Markup editor** — click the preview (or its pencil) to draw rectangles,
+  ellipses, freehand, arrows, **blur out sensitive areas**, and drop
+  **numbered step badges** (1, 2, 3… — perfect for "click here, then here"
+  bug reports and AI prompts); then **Copy** the annotated image or **Save**
   over the PNG.
 - Silent capture — no shutter sound.
 - Menu-bar only: no Dock icon, no window clutter.
@@ -83,8 +85,9 @@ actually captures. So:
 
 - **⇧⌥S** — capture a selection. Drag a box, or press **Space** then click a window.
   **Esc** cancels.
-- The bottom-right preview: **click** to open the snip, **hover** to keep it on
-  screen, **✕** to dismiss. It auto-dismisses after about 5 seconds.
+- The bottom-right preview: **click** to open the snip in the markup editor,
+  **hover** to keep it on screen, **✕** to dismiss. It auto-dismisses after
+  about 5 seconds.
 - Menu-bar icon → pick a destination: **Clipboard + Folder** (default),
   **Clipboard only**, or **Folder only**.
 - **Open Save Folder** reveals `~/Pictures/Snipper`.
