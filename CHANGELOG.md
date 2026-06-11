@@ -4,7 +4,7 @@ All notable changes to Snipper are documented here. This project follows
 [Semantic Versioning](https://semver.org) and the
 [Keep a Changelog](https://keepachangelog.com) format.
 
-## [Unreleased]
+## [1.2.0] — 2026-06-12
 
 ### Added
 - **Blur tool** in the markup editor — drag a rectangle to pixelate sensitive
@@ -61,5 +61,6 @@ First public release.
 - GitHub Actions workflow that builds on macOS and publishes a zipped build to
   Releases on a `v*` tag (manual runs upload an artifact).
 
+[1.2.0]: https://github.com/v2matosevic/Snipper/releases/tag/v1.2.0
 [1.1.0]: https://github.com/v2matosevic/Snipper/releases/tag/v1.1.0
 [1.0.0]: https://github.com/v2matosevic/Snipper/releases/tag/v1.0.0
