@@ -3,43 +3,78 @@ import Carbon.HIToolbox
 import CoreGraphics
 import ServiceManagement
 
+/// What the two post-capture editors (markup for stills, trim for movies)
+/// have in common, so the delegate can host either behind one window dance.
+protocol EditorWindowController: AnyObject {
+    var onClose: (() -> Void)? { get set }
+    func present()
+}
+
+extension AnnotationEditorWindowController: EditorWindowController {}
+extension TrimEditorWindowController: EditorWindowController {}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    // ── Shortcut ──────────────────────────────────────────────────────────
-    // ⇧⌥S. To rebind, change these two constants (key codes are `kVK_ANSI_*`,
-    // modifiers are Carbon flags: shiftKey / optionKey / controlKey / cmdKey).
+    // ── Shortcuts ─────────────────────────────────────────────────────────
+    // ⇧⌥S snips, ⇧⌥D records (press again to stop). To rebind, change these
+    // constants (key codes are `kVK_ANSI_*`, modifiers are Carbon flags:
+    // shiftKey / optionKey / controlKey / cmdKey).
     private let keyCode = UInt32(kVK_ANSI_S)
+    private let recordKeyCode = UInt32(kVK_ANSI_D)
     private let modifiers = UInt32(shiftKey | optionKey)
     // ──────────────────────────────────────────────────────────────────────
 
     private var statusItem: NSStatusItem!
     private var hotKey: HotKey?
+    private var recordHotKey: HotKey?
     private let screenshots = ScreenshotService()
+    private lazy var recorder = RecordingService(saveDirectory: screenshots.saveDirectory)
+    private lazy var retention = RetentionService(directory: screenshots.saveDirectory)
     private let thumbnail = ThumbnailController()
-    private var editors: [AnnotationEditorWindowController] = []
+    private var editors: [EditorWindowController] = []
 
     private var destinationItems: [(item: NSMenuItem, value: ScreenshotService.Destination)] = []
     private var loginItem: NSMenuItem?
+    private var recordItem: NSMenuItem?
+    private var audioItem: NSMenuItem?
 
     private let defaultsKey = "destination"
+    private let audioDefaultsKey = "recordSystemAudio"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         restoreDestination()
         buildStatusItem()
         registerHotKey()
+        retention.start()
         screenshots.onCapture = { [weak self] result in
             self?.thumbnail.show(image: result.image,
                                  fileURL: result.url,
                                  isTemporary: result.isTemporary)
+        }
+        recorder.onCapture = { [weak self] result in
+            self?.thumbnail.show(image: result.poster,
+                                 fileURL: result.url,
+                                 isTemporary: false)
+        }
+        recorder.onStateChange = { [weak self] recording in
+            self?.recordingStateChanged(recording)
         }
         thumbnail.onEdit = { [weak self] url, isTemporary in
             self?.openEditor(url: url, isTemporary: isTemporary)
         }
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        // Don't orphan a live recording: stop it and salvage the movie.
+        recorder.shutdown()
+    }
+
     // MARK: - Markup editor
 
     private func openEditor(url: URL, isTemporary: Bool) {
-        guard let controller = AnnotationEditorWindowController(url: url, isTemporary: isTemporary) else {
+        let opened: EditorWindowController? = url.pathExtension.lowercased() == "mov"
+            ? TrimEditorWindowController(url: url)
+            : AnnotationEditorWindowController(url: url, isTemporary: isTemporary)
+        guard let controller = opened else {
             NSLog("Snipper: couldn't open the editor for \(url.lastPathComponent)")
             return
         }
@@ -66,6 +101,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if hotKey == nil {
             NSLog("Snipper: failed to register ⇧⌥S (already claimed by another app?)")
         }
+        recordHotKey = HotKey(keyCode: recordKeyCode, modifiers: modifiers) { [weak self] in
+            self?.toggleRecording()
+        }
+        if recordHotKey == nil {
+            NSLog("Snipper: failed to register ⇧⌥D (already claimed by another app?)")
+        }
     }
 
     @objc private func capture() {
@@ -73,6 +114,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Snipper in the Screen Recording list and triggers the OS prompt — a
         // CGPreflight gate here just blocks before that can happen.
         screenshots.captureInteractive()
+    }
+
+    @objc private func toggleRecording() {
+        recorder.toggle()
+    }
+
+    @objc private func toggleAudio() {
+        recorder.capturesAudio.toggle()
+        UserDefaults.standard.set(recorder.capturesAudio, forKey: audioDefaultsKey)
+        audioItem?.state = recorder.capturesAudio ? .on : .off
+    }
+
+    /// Flip the menu bar into (and out of) "recording" dress: red stop icon,
+    /// menu item retitled — both so it's obvious a recording is live and how
+    /// to end it.
+    private func recordingStateChanged(_ recording: Bool) {
+        if recording {
+            setIcon("stop.circle.fill")
+            statusItem.button?.contentTintColor = .systemRed
+            recordItem?.title = "Stop Recording"
+        } else {
+            setIcon("camera.viewfinder")
+            statusItem.button?.contentTintColor = nil
+            recordItem?.title = "Record Selection"
+        }
     }
 
     // MARK: - Menu bar
@@ -87,6 +153,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         capture.keyEquivalentModifierMask = [.shift, .option]
         capture.target = self
         menu.addItem(capture)
+
+        let record = NSMenuItem(title: "Record Selection", action: #selector(toggleRecording), keyEquivalent: "d")
+        record.keyEquivalentModifierMask = [.shift, .option]
+        record.target = self
+        recordItem = record
+        menu.addItem(record)
+
+        let audio = NSMenuItem(title: "Record System Audio", action: #selector(toggleAudio), keyEquivalent: "")
+        audio.target = self
+        audio.state = recorder.capturesAudio ? .on : .off
+        audioItem = audio
+        menu.addItem(audio)
 
         menu.addItem(.separator())
         menu.addItem(destinationItem("Clipboard + Folder", .both))
@@ -126,6 +204,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func setDestination(_ sender: NSMenuItem) {
         guard let value = ScreenshotService.Destination(rawValue: sender.tag) else { return }
         screenshots.destination = value
+        recorder.destination = value
         UserDefaults.standard.set(value.rawValue, forKey: defaultsKey)
         refreshDestinationStates()
     }
@@ -140,6 +219,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let raw = UserDefaults.standard.integer(forKey: defaultsKey) // missing → 0 → .both
         if let value = ScreenshotService.Destination(rawValue: raw) {
             screenshots.destination = value
+            recorder.destination = value
+        }
+        // Missing key → keep the service's default (audio on).
+        if let audio = UserDefaults.standard.object(forKey: audioDefaultsKey) as? Bool {
+            recorder.capturesAudio = audio
         }
     }
 

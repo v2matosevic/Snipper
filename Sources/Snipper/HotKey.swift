@@ -6,9 +6,17 @@ import Carbon.HIToolbox
 /// Carbon hotkeys are global without needing Accessibility permission
 /// (unlike `CGEventTap`), which keeps Snipper's permission footprint to just
 /// Screen Recording. The hotkey fires regardless of which app is frontmost.
+///
+/// Multiple instances coexist: each registers under a unique Carbon id, and
+/// each handler checks the fired hotkey's id — returning `eventNotHandledErr`
+/// for someone else's key so Carbon keeps walking the handler chain until the
+/// owner runs its action.
 final class HotKey {
+    private static var nextID: UInt32 = 1
+
     private var hotKeyRef: EventHotKeyRef?
     private var eventHandler: EventHandlerRef?
+    private let hotKeyID: EventHotKeyID
     private let action: () -> Void
 
     /// - Parameters:
@@ -17,6 +25,9 @@ final class HotKey {
     ///   - action: invoked on the main thread each time the combo is pressed.
     init?(keyCode: UInt32, modifiers: UInt32, action: @escaping () -> Void) {
         self.action = action
+        self.hotKeyID = EventHotKeyID(signature: OSType(0x534E4950), // 'SNIP'
+                                      id: HotKey.nextID)
+        HotKey.nextID += 1
 
         var spec = EventTypeSpec(
             eventClass: OSType(kEventClassKeyboard),
@@ -26,9 +37,18 @@ final class HotKey {
 
         let installStatus = InstallEventHandler(
             GetApplicationEventTarget(),
-            { _, _, userData -> OSStatus in
-                guard let userData else { return OSStatus(eventNotHandledErr) }
+            { _, event, userData -> OSStatus in
+                guard let event, let userData else { return OSStatus(eventNotHandledErr) }
+                var fired = EventHotKeyID()
+                GetEventParameter(event,
+                                  EventParamName(kEventParamDirectObject),
+                                  EventParamType(typeEventHotKeyID),
+                                  nil,
+                                  MemoryLayout<EventHotKeyID>.size,
+                                  nil,
+                                  &fired)
                 let me = Unmanaged<HotKey>.fromOpaque(userData).takeUnretainedValue()
+                guard fired.id == me.hotKeyID.id else { return OSStatus(eventNotHandledErr) }
                 me.action()
                 return noErr
             },
@@ -36,9 +56,8 @@ final class HotKey {
         )
         guard installStatus == noErr else { return nil }
 
-        let id = EventHotKeyID(signature: OSType(0x534E4950), id: 1) // 'SNIP'
         let registerStatus = RegisterEventHotKey(
-            keyCode, modifiers, id, GetApplicationEventTarget(), 0, &hotKeyRef
+            keyCode, modifiers, hotKeyID, GetApplicationEventTarget(), 0, &hotKeyRef
         )
         guard registerStatus == noErr else { return nil }
     }
