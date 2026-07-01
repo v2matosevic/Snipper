@@ -38,7 +38,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           printf '%s\n' \
-            "Snipper — Windows-style ⇧⌥S region screenshots for macOS." \
+            "Snipper — Windows-style ⇧⌥S region screenshots for macOS," \
+            "plus ⇧⌥D screen recording with trim and system audio." \
+            "" \
+            "See CHANGELOG.md for what's new in this version." \
             "" \
             "### Install" \
             "1. Unzip and move **Snipper.app** to /Applications." \

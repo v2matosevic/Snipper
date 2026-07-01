@@ -3,3 +3,4 @@ Snipper.app/
 .signing/
 .DS_Store
 *.xcodeproj
+.playwright-mcp/
