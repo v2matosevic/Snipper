@@ -102,6 +102,9 @@ actually captures. So:
 2. Enable **Snipper** in System Settings → Privacy & Security → **Screen Recording**.
 3. Quit & reopen Snipper (a running process can't see a fresh grant). Done.
 
+The first ⇧⌥D recording with **Record System Audio** on may show one more
+one-time consent (system audio recording) — approve it once and you're set.
+
 ## Usage
 
 - **⇧⌥S** — capture a selection. Drag a box, or press **Space** then click a window.
@@ -118,13 +121,14 @@ actually captures. So:
 - **Open Save Folder** reveals `~/Pictures/Snipper`.
 - **Launch at Login** keeps Snipper running across reboots.
 
-## Rebind the shortcut
+## Rebind the shortcuts
 
-Edit the two constants at the top of `Sources/Snipper/AppDelegate.swift`, then rebuild:
+Edit the constants at the top of `Sources/Snipper/AppDelegate.swift`, then rebuild:
 
 ```swift
-private let keyCode   = UInt32(kVK_ANSI_S)            // any kVK_ANSI_* key code
-private let modifiers = UInt32(shiftKey | optionKey)  // Carbon modifier flags
+private let keyCode       = UInt32(kVK_ANSI_S)            // snip — any kVK_ANSI_* key code
+private let recordKeyCode = UInt32(kVK_ANSI_D)            // record
+private let modifiers     = UInt32(shiftKey | optionKey)  // Carbon modifier flags (both)
 ```
 
 ## How it works
